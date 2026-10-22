@@ -1,0 +1,917 @@
+# Yu-Gi-Oh! Duel Table: copy-and-paste files
+Create each file below in your GitHub repository, in this order. In your repo, click **Add file > Create new file**, type the file name exactly as shown in the heading (typing `src/rules.js` creates the `src` folder for you), paste the code, and click **Commit changes**. Repeat for all 12 files.
+When you're done, go to **Settings > Pages**, set Source to *Deploy from a branch*, choose branch `main` and folder `/ (root)`, and your duel table will be live in about a minute.
+Copy the code exactly, since a missing character will break a file. Use the copy button on each block if you see one.
+
+## 1. `package.json`
+
+````json
+{
+  "name": "ygo-duel",
+  "version": "0.1.0",
+  "description": "A small Yu-Gi-Oh! duel rules engine and hot-seat browser table (Master Rule, April 2020 revision).",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "start": "node serve.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
+````
+
+## 2. `index.html`
+
+````html
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duel table</title>
+<style>
+:root{--mat:#16302f;--panel:#0e1d27;--brass:#d4a84b;--ink:#ece6d8;--mute:#9db0ab;--back:#5b3b6b;--mon:#2c4c63;--spell:#2f6a57;--trap:#7a3b52;--line:#2c4a47}
+*{box-sizing:border-box}
+body{margin:0;background:var(--panel);color:var(--ink);font:15px/1.5 "Trebuchet MS",system-ui,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+h1{font:600 20px Georgia,serif;margin:0}
+button{font:inherit;color:var(--ink);background:#1b3a47;border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;text-align:left}
+button:hover,button:focus-visible{border-color:var(--brass);outline:none}
+main{display:grid;grid-template-columns:1fr 340px;gap:14px;padding:14px;max-width:1200px;margin:0 auto}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.board{background:var(--mat);border:1px solid var(--line);border-radius:10px;padding:12px}
+.side{padding:6px 0}
+.side h2{font:600 15px Georgia,serif;margin:0 0 6px;display:flex;justify-content:space-between}
+.lp{color:var(--brass)}
+.row{display:flex;gap:6px;margin:5px 0;align-items:stretch}
+.zone{flex:1;min-width:0;min-height:74px;border:1px dashed var(--line);border-radius:6px;padding:4px;font-size:12px;line-height:1.25;overflow:hidden}
+.zone.label{flex:0 0 74px;border:none;color:var(--mute)}
+.card{height:100%;border-radius:5px;padding:4px;background:var(--mon)}
+.card.spell{background:var(--spell)}.card.trap{background:var(--trap)}
+.card.down{background:var(--back);color:#cdbbe0;display:flex;align-items:center;justify-content:center}
+.card.def{transform:rotate(90deg) scale(.7)}
+.hand{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.hand .card{width:96px;min-height:64px;font-size:12px;height:auto}
+.mid{text-align:center;color:var(--mute);padding:6px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:6px 0}
+aside{display:flex;flex-direction:column;gap:12px}
+.box{background:#132935;border:1px solid var(--line);border-radius:10px;padding:10px}
+.box h3{font:600 14px Georgia,serif;margin:0 0 6px}
+.acts{display:flex;flex-direction:column;gap:5px;max-height:46vh;overflow:auto}
+.log{max-height:24vh;overflow:auto;font-size:13px;color:var(--mute)}
+.banner{background:#3b2f10;border:1px solid var(--brass);border-radius:8px;padding:10px;margin-bottom:10px}
+.cover{position:fixed;inset:0;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:5}
+.cover button{background:var(--brass);color:#1b1608;font-weight:700;text-align:center}
+</style></head><body>
+<header><h1>Duel table</h1><div><button id="new">New duel</button></div></header>
+<main>
+  <section class="board" id="board"></section>
+  <aside>
+    <div class="box"><h3 id="who">Your moves</h3><div class="acts" id="acts"></div></div>
+    <div class="box"><h3>Chain</h3><div id="chain" class="log">Empty</div></div>
+    <div class="box"><h3>Duel log</h3><div id="log" class="log"></div></div>
+  </aside>
+</main>
+<div class="cover" id="cover" hidden></div>
+<script type="module" src="./src/ui.js"></script>
+</body></html>
+````
+
+## 3. `serve.js`
+
+````js
+// Tiny local web server (no installs needed). Run: npm start, then open http://localhost:8080
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('.', import.meta.url));
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
+
+http.createServer(async (req, res) => {
+  const path = normalize(decodeURIComponent(req.url.split('?')[0])).replace(/^(\.\.[/\\])+/, '');
+  try {
+    const file = join(root, path === '/' ? 'index.html' : path);
+    res.writeHead(200, { 'Content-Type': types[extname(file)] || 'text/plain' });
+    res.end(await readFile(file));
+  } catch { res.writeHead(404); res.end('Not found'); }
+}).listen(8080, () => console.log('Duel table ready at http://localhost:8080'));
+````
+
+## 4. `.gitignore`
+
+````
+node_modules/
+.DS_Store
+````
+
+## 5. `.github/workflows/test.yml`
+
+````yaml
+name: Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm test
+````
+
+## 6. `src/rules.js`
+
+````js
+// Core numbers from the Master Rules (April 1, 2020 revision, the latest I could confirm).
+// If Konami changes a rule, this is the first place to look.
+export const RULES = {
+  startingLP: 8000,
+  startingHand: 5,
+  handLimit: 6,            // checked at the End Phase
+  mainDeckMin: 40,
+  mainDeckMax: 60,
+  extraDeckMax: 15,
+  copyLimit: 3,            // overridden per card by the banlist you pass in
+  zoneCount: 5,            // Monster Zones and Spell & Trap Zones
+};
+
+export const PHASES = ['main1', 'battle', 'main2', 'end'];
+// Draw and Standby phases run automatically because no supported card uses them yet.
+
+// Level 1-4: no Tribute. Level 5-6: 1 Tribute. Level 7+: 2 Tributes.
+export const tributesNeeded = (level) => (level <= 4 ? 0 : level <= 6 ? 1 : 2);
+
+// Check a deck list. `banlist` maps card id -> allowed copies (0, 1, 2). Load the current
+// Forbidden & Limited list into it; the default is empty on purpose, see README.
+export function validateDeck(mainIds, extraIds = [], banlist = {}) {
+  const errors = [];
+  if (mainIds.length < RULES.mainDeckMin) errors.push(`Main Deck has ${mainIds.length} cards; minimum is ${RULES.mainDeckMin}.`);
+  if (mainIds.length > RULES.mainDeckMax) errors.push(`Main Deck has ${mainIds.length} cards; maximum is ${RULES.mainDeckMax}.`);
+  if (extraIds.length > RULES.extraDeckMax) errors.push(`Extra Deck has ${extraIds.length} cards; maximum is ${RULES.extraDeckMax}.`);
+  const counts = {};
+  for (const id of [...mainIds, ...extraIds]) counts[id] = (counts[id] || 0) + 1;
+  for (const [id, n] of Object.entries(counts)) {
+    const limit = id in banlist ? banlist[id] : RULES.copyLimit;
+    if (n > limit) errors.push(`${id}: ${n} copies, limit is ${limit}.`);
+  }
+  return errors;
+}
+````
+
+## 7. `src/cards.js`
+
+````js
+// Card database. Plain monsters and Spells/Traps are just data.
+// A card with an effect gets a few small functions:
+//   canActivate(g, player, card) -> true/false     extra activation condition
+//   targets(g, player, card)     -> [uids]         only for effects that target
+//   resolve(g, link, api)                          what happens when the chain resolves
+// `api` is the engine's toolbox (draw, destroy, specialSummon, ...), so cards never touch zones directly.
+// Card text here is paraphrased shorthand for testing; check the real card before relying on it.
+
+const mon = (name, level, atk, def) => ({ name, kind: 'monster', level, atk, def });
+
+const stCards = (g, p) => {
+  const out = [];
+  for (const pl of g.players) {
+    for (const c of pl.szone) if (c) out.push(c.uid);
+    if (pl.field) out.push(pl.field.uid);
+  }
+  return out;
+};
+
+export const CARDS = {
+  celtic_guardian: mon('Celtic Guardian', 4, 1400, 1200),
+  giant_soldier: mon('Giant Soldier of Stone', 3, 1300, 2000),
+  mystical_elf: mon('Mystical Elf', 4, 800, 2000),
+  battle_ox: mon('Battle Ox', 4, 1700, 1000),
+  axe_raider: mon('Axe Raider', 4, 1700, 1150),
+  feral_imp: mon('Feral Imp', 4, 1300, 1400),
+  summoned_skull: mon('Summoned Skull', 6, 2500, 1200),
+  gaia: mon('Gaia The Fierce Knight', 7, 2300, 2100),
+  dark_magician: mon('Dark Magician', 7, 2500, 2100),
+  blue_eyes: mon('Blue-Eyes White Dragon', 8, 3000, 2500),
+
+  pot_of_greed: {
+    name: 'Pot of Greed', kind: 'spell', sub: 'normal', speed: 1,
+    canActivate: (g, p) => g.players[p].deck.length >= 2,
+    resolve: (g, link, api) => api.draw(g, link.player, 2),
+  },
+  dark_hole: {
+    name: 'Dark Hole', kind: 'spell', sub: 'normal', speed: 1,
+    resolve: (g, link, api) => {
+      const all = g.players.flatMap((pl) => pl.mzone.filter(Boolean));
+      for (const c of all) api.destroy(g, c.uid);
+    },
+  },
+  monster_reborn: {
+    name: 'Monster Reborn', kind: 'spell', sub: 'normal', speed: 1,
+    canActivate: (g, p) => g.players[p].mzone.some((c) => !c),
+    targets: (g) => g.players.flatMap((pl) => pl.gy.filter((c) => CARDS[c.id].kind === 'monster').map((c) => c.uid)),
+    resolve: (g, link, api) => api.specialSummon(g, link.player, link.target),
+  },
+  mystical_typhoon: {
+    name: 'Mystical Typhoon', kind: 'spell', sub: 'quickplay', speed: 2,
+    targets: (g, p, card) => stCards(g, p).filter((u) => u !== card.uid),
+    resolve: (g, link, api) => api.destroyIfOnField(g, link.target),
+  },
+  dust_tornado: {
+    name: 'Dust Tornado', kind: 'trap', sub: 'normal', speed: 2,
+    targets: (g, p) => stCards(g, p).filter((u) => g.players[1 - p].szone.some((c) => c && c.uid === u) || g.players[1 - p].field?.uid === u),
+    resolve: (g, link, api) => api.destroyIfOnField(g, link.target),
+  },
+};
+````
+
+## 8. `src/decks.js`
+
+````js
+// Two sample 40-card decks so you can start dueling right away.
+const rep = (id, n) => Array(n).fill(id);
+
+export const SAMPLE_DECK = [
+  ...rep('celtic_guardian', 3), ...rep('giant_soldier', 3), ...rep('mystical_elf', 3),
+  ...rep('battle_ox', 3), ...rep('axe_raider', 3), ...rep('feral_imp', 3),
+  ...rep('summoned_skull', 3), ...rep('gaia', 3), ...rep('dark_magician', 2), ...rep('blue_eyes', 3),
+  ...rep('pot_of_greed', 3), 'dark_hole', 'monster_reborn', ...rep('mystical_typhoon', 3), ...rep('dust_tornado', 3),
+];
+````
+
+## 9. `src/engine.js`
+
+````js
+// The duel engine. Three ideas keep it honest:
+//  1. getLegalActions() lists every move the rules allow right now.
+//  2. dispatch() only accepts a move that appears in that list (check #1).
+//  3. dispatch() runs the move on a COPY of the game, audits the result, and only then
+//     replaces the real game (check #2). A bug can never leave a half-broken board.
+import { RULES, tributesNeeded } from './rules.js';
+import { CARDS } from './cards.js';
+import { validateDeck } from './rules.js';
+
+export class IllegalAction extends Error {}
+const opp = (p) => 1 - p;
+const isMain = (g) => g.phase === 'main1' || g.phase === 'main2';
+const free = (arr) => arr.filter((x) => !x).length;
+
+// ---------- seeded randomness (same seed = same shuffle, which makes bugs reproducible) ----------
+function rand(g) {
+  g.seed = (g.seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(g.seed ^ (g.seed >>> 15), 1 | g.seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function shuffle(g, arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand(g) * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+const log = (g, msg) => { g.log.push(msg); if (g.log.length > 200) g.log.shift(); };
+
+// ---------- setup ----------
+export function createGame({ decks, seed = Date.now() | 0, firstPlayer, banlist = {} }) {
+  const g = { seed, turn: 1, turnPlayer: 0, phase: 'main1', priority: 0, chain: [], passes: 0,
+    window: null, result: null, log: [], players: [], initialCounts: [0, 0] };
+  for (let p = 0; p < 2; p++) {
+    const errors = validateDeck(decks[p], [], banlist);
+    if (errors.length) throw new Error(`Player ${p + 1} deck is not legal: ${errors.join(' ')}`);
+    for (const id of decks[p]) if (!CARDS[id]) throw new Error(`Unknown card id: ${id}`);
+    const deck = decks[p].map((id, i) => ({ uid: `p${p}-${i}`, id, owner: p, faceUp: false, pos: 'atk',
+      setTurn: -1, summonTurn: -1, attacked: false, posChanged: false }));
+    shuffle(g, deck);
+    g.initialCounts[p] = deck.length;
+    g.players.push({ lp: RULES.startingLP, deck, hand: [], extra: [], gy: [], banished: [],
+      mzone: Array(RULES.zoneCount).fill(null), szone: Array(RULES.zoneCount).fill(null),
+      field: null, normalSummoned: false });
+  }
+  g.turnPlayer = firstPlayer ?? (rand(g) < 0.5 ? 0 : 1);
+  for (let p = 0; p < 2; p++) draw(g, p, RULES.startingHand);
+  startTurn(g);
+  log(g, `Player ${g.turnPlayer + 1} goes first.`);
+  return g;
+}
+
+function startTurn(g) {
+  const pl = g.players[g.turnPlayer];
+  pl.normalSummoned = false;
+  for (const c of [...pl.mzone, ...pl.szone]) if (c) { c.attacked = false; c.posChanged = false; }
+  g.phase = 'main1'; g.priority = g.turnPlayer; g.chain = []; g.passes = 0; g.window = null;
+  if (g.turn > 1) draw(g, g.turnPlayer, 1); // the first player skips their first Draw Phase
+  log(g, `Turn ${g.turn}: Player ${g.turnPlayer + 1}.`);
+}
+
+// ---------- card movement: every move goes through these helpers ----------
+export function findCard(g, uid) {
+  for (const p of [0, 1]) {
+    const pl = g.players[p];
+    for (const zone of ['hand', 'deck', 'extra', 'gy', 'banished', 'mzone', 'szone']) {
+      const index = pl[zone].findIndex((c) => c && c.uid === uid);
+      if (index >= 0) return { p, zone, index, card: pl[zone][index] };
+    }
+    if (pl.field && pl.field.uid === uid) return { p, zone: 'field', index: 0, card: pl.field };
+  }
+  return null;
+}
+function detach(g, uid) {
+  const f = findCard(g, uid);
+  if (!f) throw new Error(`Card ${uid} not found`);
+  const pl = g.players[f.p];
+  if (f.zone === 'mzone' || f.zone === 'szone') pl[f.zone][f.index] = null;
+  else if (f.zone === 'field') pl.field = null;
+  else pl[f.zone].splice(f.index, 1);
+  return f.card;
+}
+function sendTo(g, uid, zone) { // 'gy' | 'hand' | 'banished' | 'deck' — always the OWNER's side
+  const card = detach(g, uid);
+  Object.assign(card, { faceUp: false, pos: 'atk', attacked: false, posChanged: false });
+  g.players[card.owner][zone].push(card);
+  return card;
+}
+const firstFree = (arr) => arr.findIndex((x) => !x);
+
+function draw(g, p, n) {
+  for (let i = 0; i < n; i++) {
+    const pl = g.players[p];
+    if (!pl.deck.length) { g.result = { winner: opp(p), reason: `Player ${p + 1} cannot draw (deck out)` }; return; }
+    pl.hand.push(pl.deck.shift());
+  }
+}
+function destroy(g, uid) { if (findCard(g, uid)) sendTo(g, uid, 'gy'); }
+function destroyIfOnField(g, uid) {
+  const f = findCard(g, uid);
+  if (f && ['mzone', 'szone', 'field'].includes(f.zone)) sendTo(g, uid, 'gy');
+}
+function specialSummon(g, p, uid) {
+  const f = findCard(g, uid);
+  const slot = firstFree(g.players[p].mzone);
+  if (!f || f.zone !== 'gy' || slot < 0) return;
+  const card = detach(g, uid);
+  Object.assign(card, { faceUp: true, pos: 'atk', summonTurn: g.turn });
+  g.players[p].mzone[slot] = card;
+}
+const api = { draw, destroy, destroyIfOnField, specialSummon, sendTo };
+
+// ---------- which cards can act right now ----------
+function* combos(arr, k, start = 0, cur = []) {
+  if (cur.length === k) { yield [...cur]; return; }
+  for (let i = start; i < arr.length; i++) { cur.push(arr[i]); yield* combos(arr, k, i + 1, cur); cur.pop(); }
+}
+
+function stActivations(g, p) {
+  const pl = g.players[p], out = [];
+  const responding = g.chain.length > 0 || !!g.window;
+  const topSpeed = g.chain.length ? g.chain[g.chain.length - 1].speed : 0;
+  const sources = [
+    ...pl.hand.map((c) => ({ c, from: 'hand' })),
+    ...pl.szone.filter((c) => c && !c.faceUp).map((c) => ({ c, from: 'set' })),
+    ...(pl.field && !pl.field.faceUp ? [{ c: pl.field, from: 'set' }] : []),
+  ];
+  for (const { c, from } of sources) {
+    const d = CARDS[c.id];
+    if (d.kind === 'monster') continue;
+    if (responding && d.speed < Math.max(2, topSpeed)) continue;      // spell speed rule
+    const needsWait = d.kind === 'trap' || d.sub === 'quickplay';     // must be Set a turn first
+    if (from === 'hand') {
+      if (d.kind === 'trap') continue;                                // Traps must be Set first
+      if (d.sub === 'quickplay') { if (p !== g.turnPlayer) continue; }
+      else if (responding || p !== g.turnPlayer || !isMain(g)) continue;
+      if (d.sub !== 'field' && free(pl.szone) < 1) continue;
+    } else if (needsWait) {
+      if (c.setTurn >= g.turn) continue;
+    } else if (responding || p !== g.turnPlayer || !isMain(g)) continue;
+    if (d.canActivate && !d.canActivate(g, p, c)) continue;
+    const ts = d.targets ? d.targets(g, p, c) : null;
+    if (ts) { for (const t of ts) out.push({ type: 'activate', player: p, uid: c.uid, target: t }); }
+    else out.push({ type: 'activate', player: p, uid: c.uid, target: null });
+  }
+  return out;
+}
+
+export function getLegalActions(g) {
+  if (g.result) return [];
+  const p = g.priority, pl = g.players[p], out = [];
+  if (g.chain.length || g.window) return [...stActivations(g, p), { type: 'pass', player: p }];
+
+  if (g.phase === 'end') { // hand limit: discard down before the turn can end
+    for (const c of pl.hand) out.push({ type: 'discard', player: p, uid: c.uid });
+    return out;
+  }
+  if (isMain(g)) {
+    const mons = pl.mzone.filter(Boolean).map((c) => c.uid);
+    for (const c of pl.hand) {
+      const d = CARDS[c.id];
+      if (d.kind === 'monster' && !pl.normalSummoned) {
+        for (const t of combos(mons, tributesNeeded(d.level))) {
+          if (free(pl.mzone) + t.length < 1) continue;
+          out.push({ type: 'summon', player: p, uid: c.uid, tributes: t });
+          out.push({ type: 'set', player: p, uid: c.uid, tributes: t });
+        }
+      } else if (d.kind !== 'monster') {
+        if (d.sub === 'field' ? !pl.field : free(pl.szone) > 0) out.push({ type: 'setST', player: p, uid: c.uid });
+      }
+    }
+    for (const c of pl.mzone) {
+      if (!c) continue;
+      if (!c.faceUp && c.setTurn < g.turn) out.push({ type: 'flip', player: p, uid: c.uid });
+      if (c.faceUp && !c.posChanged && !c.attacked && c.summonTurn < g.turn) out.push({ type: 'position', player: p, uid: c.uid });
+    }
+  }
+  out.push(...stActivations(g, p));
+  if (g.phase === 'battle' && g.turn > 1) { // no attacks on the very first turn of the duel
+    const enemies = g.players[opp(p)].mzone.filter(Boolean);
+    for (const c of pl.mzone) {
+      if (!c || !c.faceUp || c.pos !== 'atk' || c.attacked) continue;
+      if (!enemies.length) out.push({ type: 'attack', player: p, attacker: c.uid, target: 'direct' });
+      for (const e of enemies) out.push({ type: 'attack', player: p, attacker: c.uid, target: e.uid });
+    }
+  }
+  const next = { main1: ['battle', 'end'], battle: ['main2', 'end'], main2: ['end'] }[g.phase];
+  for (const to of next) out.push({ type: 'phase', player: p, to });
+  return out;
+}
+
+// ---------- applying actions ----------
+function placeMonster(g, p, card, faceUp) {
+  const slot = firstFree(g.players[p].mzone);
+  Object.assign(card, { faceUp, pos: faceUp ? 'atk' : 'def', setTurn: faceUp ? card.setTurn : g.turn, summonTurn: g.turn });
+  g.players[p].mzone[slot] = card;
+}
+
+function battle(g, p, attackerUid, target) {
+  const att = findCard(g, attackerUid).card;
+  const A = CARDS[att.id].atk;
+  att.attacked = true;
+  const enemy = g.players[opp(p)], me = g.players[p];
+  if (target === 'direct') { enemy.lp = Math.max(0, enemy.lp - A); log(g, `${CARDS[att.id].name} attacks directly for ${A}.`); return; }
+  const t = findCard(g, target).card, td = CARDS[t.id];
+  if (!t.faceUp) { t.faceUp = true; log(g, `${td.name} is flipped face-up.`); }
+  const diff = A - (t.pos === 'atk' ? td.atk : td.def);
+  log(g, `${CARDS[att.id].name} (${A}) attacks ${td.name} in ${t.pos === 'atk' ? 'Attack' : 'Defense'} Position.`);
+  if (t.pos === 'atk') {
+    if (diff > 0) { destroy(g, t.uid); enemy.lp = Math.max(0, enemy.lp - diff); }
+    else if (diff < 0) { destroy(g, att.uid); me.lp = Math.max(0, me.lp + diff); }
+    else { destroy(g, t.uid); destroy(g, att.uid); }
+  } else if (diff > 0) destroy(g, t.uid);           // no piercing damage without a card that says so
+  else if (diff < 0) me.lp = Math.max(0, me.lp + diff); // attacker's controller takes the difference
+}
+
+function resolveChain(g) {
+  while (g.chain.length && !g.result) {
+    const link = g.chain.pop(), d = CARDS[link.id];
+    log(g, `Resolving ${d.name}.`);
+    d.resolve(g, link, api);
+    const f = findCard(g, link.uid);
+    const spent = (d.kind === 'spell' && (d.sub === 'normal' || d.sub === 'quickplay')) || (d.kind === 'trap' && d.sub === 'normal');
+    if (f && f.zone === 'szone' && spent) sendTo(g, link.uid, 'gy');
+    checkResult(g);
+  }
+  g.passes = 0; g.window = null; g.priority = g.turnPlayer;
+}
+
+function requestPhase(g, p, to) { // the opponent only gets a window if they could actually do something
+  const probe = { ...g, window: { kind: 'phase' }, chain: [], priority: opp(p) };
+  if (stActivations(probe, opp(p)).length) { g.window = { kind: 'phase', next: to }; g.priority = opp(p); g.passes = 0; }
+  else enterPhase(g, to);
+}
+function enterPhase(g, to) {
+  g.phase = to;
+  if (to === 'end' && g.players[g.turnPlayer].hand.length <= RULES.handLimit) endTurn(g);
+}
+function endTurn(g) {
+  g.turnPlayer = opp(g.turnPlayer); g.turn++;
+  startTurn(g);
+}
+
+function apply(g, a) {
+  const p = a.player, pl = g.players[p];
+  switch (a.type) {
+    case 'summon': case 'set': {
+      for (const t of a.tributes) sendTo(g, t, 'gy');
+      const card = detach(g, a.uid);
+      placeMonster(g, p, card, a.type === 'summon');
+      pl.normalSummoned = true;
+      log(g, a.type === 'summon' ? `Player ${p + 1} Normal Summons ${CARDS[card.id].name}.` : `Player ${p + 1} Sets a monster.`);
+      break;
+    }
+    case 'flip': { const c = findCard(g, a.uid).card; Object.assign(c, { faceUp: true, pos: 'atk', summonTurn: g.turn }); log(g, `Flip Summon: ${CARDS[c.id].name}.`); break; }
+    case 'position': { const c = findCard(g, a.uid).card; c.pos = c.pos === 'atk' ? 'def' : 'atk'; c.posChanged = true; break; }
+    case 'setST': {
+      const card = detach(g, a.uid), d = CARDS[card.id];
+      card.faceUp = false; card.setTurn = g.turn;
+      if (d.sub === 'field') pl.field = card; else pl.szone[firstFree(pl.szone)] = card;
+      log(g, `Player ${p + 1} Sets a card.`);
+      break;
+    }
+    case 'activate': {
+      const f = findCard(g, a.uid), d = CARDS[f.card.id], card = f.card;
+      if (f.zone === 'hand') {
+        detach(g, a.uid);
+        if (d.sub === 'field') { if (pl.field) sendTo(g, pl.field.uid, 'gy'); pl.field = card; }
+        else pl.szone[firstFree(pl.szone)] = card;
+      }
+      card.faceUp = true;
+      g.chain.push({ player: p, uid: card.uid, id: card.id, target: a.target, speed: d.speed });
+      g.passes = 0; g.priority = opp(p);
+      log(g, `Player ${p + 1} activates ${d.name}.`);
+      break;
+    }
+    case 'attack': battle(g, p, a.attacker, a.target); break;
+    case 'phase': requestPhase(g, p, a.to); break;
+    case 'discard': sendTo(g, a.uid, 'gy'); if (pl.hand.length <= RULES.handLimit) endTurn(g); break;
+    case 'pass':
+      if (!g.chain.length && g.window) { const to = g.window.next; g.window = null; g.priority = g.turnPlayer; g.passes = 0; enterPhase(g, to); }
+      else { g.passes++; if (g.passes >= 2) resolveChain(g); else g.priority = opp(g.priority); }
+      break;
+    default: throw new IllegalAction(`Unknown action type ${a.type}`);
+  }
+  checkResult(g);
+}
+
+function checkResult(g) {
+  if (g.result) return;
+  const [a, b] = g.players.map((x) => x.lp <= 0);
+  if (a && b) g.result = { winner: null, reason: 'Both players reached 0 Life Points' };
+  else if (a) g.result = { winner: 1, reason: 'Player 1 reached 0 Life Points' };
+  else if (b) g.result = { winner: 0, reason: 'Player 2 reached 0 Life Points' };
+}
+
+// ---------- the second check: audit the board after every action ----------
+export function audit(g) {
+  const problems = [], seen = new Set();
+  const counts = [0, 0];
+  for (let p = 0; p < 2; p++) {
+    const pl = g.players[p];
+    if (!Number.isFinite(pl.lp) || pl.lp < 0) problems.push(`Player ${p + 1} has invalid Life Points ${pl.lp}`);
+    if (pl.mzone.length !== RULES.zoneCount || pl.szone.length !== RULES.zoneCount) problems.push(`Player ${p + 1} has the wrong number of zones`);
+    const place = (c, where, ok) => {
+      if (!c) return;
+      if (seen.has(c.uid)) problems.push(`${c.uid} appears twice`);
+      seen.add(c.uid); counts[c.owner]++;
+      if (!ok) problems.push(`${CARDS[c.id].name} (${c.uid}) is illegally in ${where}`);
+      if (where === 'mzone' && !c.faceUp && c.pos !== 'def') problems.push(`Face-down ${c.uid} must be in Defense Position`);
+      if (where === 'szone' && !c.faceUp && c.pos !== 'atk') problems.push(`${c.uid} has a bad position`);
+    };
+    for (const z of ['hand', 'deck', 'extra', 'gy', 'banished']) for (const c of pl[z]) place(c, z, true);
+    for (const c of pl.mzone) place(c, 'mzone', c && CARDS[c.id].kind === 'monster');
+    for (const c of pl.szone) place(c, 'szone', c && CARDS[c.id].kind !== 'monster' && CARDS[c.id].sub !== 'field');
+    place(pl.field, 'field', pl.field && CARDS[pl.field.id].sub === 'field');
+  }
+  for (let p = 0; p < 2; p++) if (counts[p] !== g.initialCounts[p]) problems.push(`Player ${p + 1}'s cards changed from ${g.initialCounts[p]} to ${counts[p]}`);
+  for (const l of g.chain) if (!seen.has(l.uid)) problems.push(`Chain link refers to missing card ${l.uid}`);
+  if (!g.chain.length && !g.window && g.priority !== g.turnPlayer) problems.push('Priority is with the wrong player');
+  return problems;
+}
+
+export function dispatch(game, action) {
+  if (game.result) throw new IllegalAction('The duel is over.');
+  const key = JSON.stringify(action);
+  if (!getLegalActions(game).some((a) => JSON.stringify(a) === key)) throw new IllegalAction(`Not a legal action right now: ${key}`);
+  const next = structuredClone(game);
+  apply(next, action);
+  const problems = audit(next);
+  if (problems.length) throw new Error(`Rule audit failed, move rejected: ${problems.join('; ')}`);
+  return next;
+}
+
+export function describe(g, a) {
+  const nm = (uid) => { const f = findCard(g, uid); return f ? (f.card.faceUp || f.zone === 'hand' || a.player === f.p ? CARDS[f.card.id].name : 'a face-down card') : uid; };
+  switch (a.type) {
+    case 'summon': return `Normal Summon ${nm(a.uid)}${a.tributes.length ? ` (Tribute ${a.tributes.map(nm).join(' + ')})` : ''}`;
+    case 'set': return `Set ${nm(a.uid)} face-down${a.tributes.length ? ` (Tribute ${a.tributes.map(nm).join(' + ')})` : ''}`;
+    case 'flip': return `Flip Summon ${nm(a.uid)}`;
+    case 'position': return `Change position of ${nm(a.uid)}`;
+    case 'setST': return `Set ${nm(a.uid)}`;
+    case 'activate': return `Activate ${nm(a.uid)}${a.target ? ` targeting ${nm(a.target)}` : ''}`;
+    case 'attack': return `${nm(a.attacker)} attacks ${a.target === 'direct' ? 'directly' : nm(a.target)}`;
+    case 'phase': return a.to === 'end' ? 'End turn' : `Go to ${a.to === 'battle' ? 'Battle Phase' : 'Main Phase 2'}`;
+    case 'discard': return `Discard ${nm(a.uid)} (hand limit)`;
+    case 'pass': return g.window ? 'Do nothing (let it go ahead)' : 'Pass (no response)';
+    default: return a.type;
+  }
+}
+````
+
+## 10. `src/ui.js`
+
+````js
+// Hot-seat table: both players share one screen. A cover hides the hand whenever control passes.
+import { createGame, getLegalActions, dispatch, describe, findCard, audit } from './engine.js';
+import { CARDS } from './cards.js';
+import { SAMPLE_DECK } from './decks.js';
+
+let game, shownFor = -1;
+const $ = (id) => document.getElementById(id);
+
+function newDuel() { game = createGame({ decks: [SAMPLE_DECK, SAMPLE_DECK] }); shownFor = -1; render(); }
+
+const cardHTML = (c, own, inHand = false) => {
+  if (!c) return '';
+  const d = CARDS[c.id], hidden = !c.faceUp && !inHand;
+  if (hidden && !own) return '<div class="card down">face-down</div>';
+  const stats = d.kind === 'monster' ? `<br>${d.atk}/${d.def} Lv${d.level}` : '';
+  const pos = c.faceUp ? '' : ' (set)';
+  return `<div class="card ${d.kind} ${hidden ? '' : ''} ${d.kind === 'monster' && c.pos === 'def' ? 'def' : ''}">${d.name}${pos}${stats}</div>`;
+};
+const zone = (c, own) => `<div class="zone">${cardHTML(c, own)}</div>`;
+
+function side(p, viewer) {
+  const pl = game.players[p], own = p === viewer;
+  const pile = (label, n) => `<div class="zone label">${label}<br>${n}</div>`;
+  const hand = own ? pl.hand.map((c) => cardHTML(c, true, true)).join('') : pl.hand.map(() => '<div class="card down">card</div>').join('');
+  const monsters = `<div class="row">${pile('Graveyard', pl.gy.length)}${pl.mzone.map((c) => zone(c, own)).join('')}${pile('Banished', pl.banished.length)}</div>`;
+  const spells = `<div class="row">${pile('Deck', pl.deck.length)}${pl.szone.map((c) => zone(c, own)).join('')}<div class="zone">${cardHTML(pl.field, own)}<small>Field</small></div></div>`;
+  return `<div class="side"><h2><span>Player ${p + 1}${p === game.turnPlayer ? ' (turn)' : ''}</span><span class="lp">${pl.lp} LP</span></h2>
+    ${p === viewer ? monsters + spells : spells + monsters}<div class="hand">${hand}</div></div>`;
+}
+
+function render() {
+  if (!game) return;
+  const viewer = game.priority;
+  const problems = audit(game);
+  $('board').innerHTML =
+    (game.result ? `<div class="banner">Duel over: ${game.result.winner === null ? 'draw' : `Player ${game.result.winner + 1} wins`} — ${game.result.reason}.</div>` : '') +
+    (problems.length ? `<div class="banner">Audit warning: ${problems.join('; ')}</div>` : '') +
+    side(1 - viewer, viewer) +
+    `<div class="mid">Turn ${game.turn} · Player ${game.turnPlayer + 1} · ${({ main1: 'Main Phase 1', battle: 'Battle Phase', main2: 'Main Phase 2', end: 'End Phase' })[game.phase]}</div>` +
+    side(viewer, viewer);
+
+  const acts = getLegalActions(game);
+  $('who').textContent = game.result ? 'Duel finished' : `Player ${viewer + 1}: choose a move`;
+  const order = ['summon', 'set', 'setST', 'flip', 'position', 'activate', 'attack', 'discard', 'phase', 'pass'];
+  acts.sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
+  $('acts').innerHTML = '';
+  for (const a of acts) {
+    const b = document.createElement('button');
+    b.textContent = describe(game, a);
+    b.onclick = () => { try { game = dispatch(game, a); } catch (e) { alert(e.message); } render(); };
+    $('acts').append(b);
+  }
+  $('chain').innerHTML = game.chain.length ? game.chain.map((l, i) => `Link ${i + 1}: ${CARDS[l.id].name}`).reverse().join('<br>') : 'Empty';
+  $('log').innerHTML = game.log.slice(-25).reverse().join('<br>');
+
+  // Hide the hand whenever control moves to the other player.
+  if (!game.result && shownFor !== viewer) {
+    shownFor = viewer;
+    const cover = $('cover');
+    cover.hidden = false;
+    cover.innerHTML = `<h2>Player ${viewer + 1}, your move</h2><p>Pass the screen, then reveal your hand.</p><button id="reveal">Show my hand</button>`;
+    $('reveal').onclick = () => { cover.hidden = true; };
+  }
+}
+
+$('new').onclick = newDuel;
+newDuel();
+````
+
+## 11. `test/engine.test.js`
+
+````js
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createGame, getLegalActions, dispatch, audit, IllegalAction, findCard } from '../src/engine.js';
+import { validateDeck } from '../src/rules.js';
+import { SAMPLE_DECK } from '../src/decks.js';
+
+const newGame = (seed = 1) => createGame({ decks: [SAMPLE_DECK, SAMPLE_DECK], seed, firstPlayer: 0 });
+// Pull a specific card from a player's deck into their hand (test helper).
+function give(g, p, id) {
+  const pl = g.players[p];
+  const i = pl.deck.findIndex((c) => c.id === id);
+  assert.ok(i >= 0, `no ${id} left in deck`);
+  const [c] = pl.deck.splice(i, 1);
+  pl.hand.push(c);
+  return c;
+}
+const pick = (g, pred) => { const a = getLegalActions(g).find(pred); assert.ok(a, 'expected legal action not found'); return a; };
+const act = (g, pred) => dispatch(g, pick(g, pred));
+// Put a face-up monster straight onto a field (test helper).
+function field(g, p, id, { faceUp = true, pos = 'atk', slot = 0 } = {}) {
+  const c = give(g, p, id);
+  g.players[p].hand.splice(g.players[p].hand.indexOf(c), 1);
+  Object.assign(c, { faceUp, pos, summonTurn: -1, setTurn: -1 });
+  g.players[p].mzone[slot] = c;
+  return c;
+}
+const toBattle = (g) => act(g, (a) => a.type === 'phase' && a.to === 'battle');
+const endTurn = (g) => { g = act(g, (a) => a.type === 'phase' && a.to === 'end'); while (g.phase === 'end' && !g.result) g = dispatch(g, getLegalActions(g)[0]); return g; };
+
+test('starting state follows the setup rules', () => {
+  const g = newGame();
+  assert.equal(g.players[0].lp, 8000);
+  assert.equal(g.players[0].hand.length, 5);
+  assert.equal(g.players[1].hand.length, 5);
+  assert.equal(g.players[0].deck.length, 35);
+  assert.deepEqual(audit(g), []);
+});
+
+test('deck legality: size and copy limits', () => {
+  assert.deepEqual(validateDeck(SAMPLE_DECK), []);
+  assert.ok(validateDeck(SAMPLE_DECK.slice(0, 39)).length);
+  assert.ok(validateDeck([...SAMPLE_DECK.slice(0, 36), 'blue_eyes', 'blue_eyes', 'blue_eyes', 'blue_eyes']).length);
+  assert.ok(validateDeck(SAMPLE_DECK, [], { pot_of_greed: 0 }).length, 'banlist should be enforced');
+});
+
+test('first player does not draw on turn 1 and second player draws on turn 2', () => {
+  let g = newGame();
+  assert.equal(g.players[0].hand.length, 5);
+  g = endTurn(g);
+  assert.equal(g.turnPlayer, 1);
+  assert.equal(g.players[1].hand.length, 6);
+});
+
+test('no attacks on the first turn of the duel', () => {
+  let g = newGame();
+  field(g, 0, 'battle_ox');
+  g = toBattle(g);
+  assert.ok(!getLegalActions(g).some((a) => a.type === 'attack'));
+});
+
+test('only one Normal Summon or Set per turn', () => {
+  let g = newGame();
+  give(g, 0, 'celtic_guardian'); give(g, 0, 'feral_imp');
+  g = act(g, (a) => a.type === 'summon' && g.players[0].hand.find((c) => c.uid === a.uid).id === 'celtic_guardian');
+  assert.ok(!getLegalActions(g).some((a) => a.type === 'summon' || a.type === 'set'));
+});
+
+test('tribute requirements by level', () => {
+  let g = newGame();
+  const be = give(g, 0, 'blue_eyes'); give(g, 0, 'summoned_skull');
+  assert.ok(!getLegalActions(g).some((a) => a.uid === be.uid && a.type === 'summon'), 'level 8 needs two Tributes');
+  field(g, 0, 'celtic_guardian', { slot: 0 });
+  assert.ok(getLegalActions(g).some((a) => a.type === 'summon' && g.players[0].hand.find((c) => c.uid === a.uid)?.id === 'summoned_skull' && a.tributes.length === 1));
+  field(g, 0, 'giant_soldier', { slot: 1 });
+  assert.ok(getLegalActions(g).some((a) => a.uid === be.uid && a.type === 'summon' && a.tributes.length === 2));
+});
+
+test('an action that is not in the legal list is rejected', () => {
+  const g = newGame();
+  assert.throws(() => dispatch(g, { type: 'attack', player: 0, attacker: 'p0-0', target: 'direct' }), IllegalAction);
+  assert.throws(() => dispatch(g, { type: 'summon', player: 1, uid: g.players[1].hand[0].uid, tributes: [] }), IllegalAction);
+});
+
+test('battle: ATK vs ATK destroys the weaker monster and deals the difference', () => {
+  let g = newGame();
+  g.turn = 2; // allow battle
+  field(g, 0, 'summoned_skull', { slot: 0 });
+  field(g, 1, 'battle_ox', { slot: 0 });
+  g = toBattle(g);
+  const target = g.players[1].mzone[0].uid;
+  g = act(g, (a) => a.type === 'attack' && a.target === target);
+  assert.equal(g.players[1].lp, 8000 - 800);
+  assert.equal(g.players[1].gy.length, 1);
+});
+
+test('battle: attacking a Defense Position monster with less ATK hurts the attacker', () => {
+  let g = newGame();
+  g.turn = 2;
+  field(g, 0, 'battle_ox', { slot: 0 });
+  field(g, 1, 'mystical_elf', { slot: 0, pos: 'def' });
+  g = toBattle(g);
+  g = act(g, (a) => a.type === 'attack');
+  assert.equal(g.players[0].lp, 8000 - 300);
+  assert.equal(g.players[1].gy.length, 0);
+});
+
+test('battle: direct attack only when the opponent has no monsters; each monster attacks once', () => {
+  let g = newGame();
+  g.turn = 2;
+  field(g, 0, 'battle_ox');
+  g = toBattle(g);
+  g = act(g, (a) => a.type === 'attack' && a.target === 'direct');
+  assert.equal(g.players[1].lp, 6300);
+  assert.ok(!getLegalActions(g).some((a) => a.type === 'attack'));
+});
+
+test('Pot of Greed goes on the chain, resolves after both pass, then goes to the Graveyard', () => {
+  let g = newGame();
+  const pot = give(g, 0, 'pot_of_greed');
+  g = act(g, (a) => a.type === 'activate' && a.uid === pot.uid);
+  assert.equal(g.chain.length, 1);
+  g = act(g, (a) => a.type === 'pass'); // opponent passes
+  g = act(g, (a) => a.type === 'pass'); // activator passes
+  assert.equal(g.chain.length, 0);
+  assert.equal(g.players[0].hand.length, 5 + 1 - 1 + 2);
+  assert.equal(findCard(g, pot.uid).zone, 'gy');
+});
+
+test('a Set Trap cannot be activated the turn it was Set, but can on the opponent\'s turn', () => {
+  let g = newGame();
+  const trap = give(g, 0, 'dust_tornado'); give(g, 1, 'pot_of_greed');
+  g = act(g, (a) => a.type === 'setST' && a.uid === trap.uid);
+  assert.ok(!getLegalActions(g).some((a) => a.type === 'activate' && a.uid === trap.uid));
+  g = endTurn(g);
+  // Player 2 sets a spell, then player 1's trap becomes live on player 2's turn.
+  const spell = g.players[1].hand.find((c) => c.id === 'pot_of_greed');
+  g = act(g, (a) => a.type === 'setST' && a.uid === spell.uid);
+  g = act(g, (a) => a.type === 'phase' && a.to === 'end'); // opponent window opens
+  assert.equal(g.priority, 0);
+  g = act(g, (a) => a.type === 'activate' && a.uid === trap.uid && a.target === spell.uid);
+  g = act(g, (a) => a.type === 'pass'); g = act(g, (a) => a.type === 'pass');
+  assert.equal(findCard(g, spell.uid).zone, 'gy');
+  assert.deepEqual(audit(g), []);
+});
+
+test('hand limit: must discard to 6 before the turn can end', () => {
+  let g = newGame();
+  give(g, 0, 'celtic_guardian'); give(g, 0, 'feral_imp'); // hand is now 7
+  g = act(g, (a) => a.type === 'phase' && a.to === 'end');
+  assert.equal(g.phase, 'end');
+  assert.ok(getLegalActions(g).every((a) => a.type === 'discard'));
+  g = dispatch(g, getLegalActions(g)[0]);
+  assert.equal(g.turnPlayer, 1);
+});
+
+test('deck out loses the game', () => {
+  let g = newGame();
+  g.players[1].deck.length = 0;
+  g.initialCounts[1] = 5; // keep the audit consistent with the edit above
+  g = endTurn(g);
+  assert.equal(g.result.winner, 0);
+});
+
+test('the audit catches a corrupted board', () => {
+  const g = newGame();
+  g.players[0].hand.push(structuredClone(g.players[0].hand[0])); // duplicate card
+  assert.ok(audit(g).length > 0);
+  const h = newGame();
+  h.players[0].mzone[0] = h.players[0].deck.shift(); h.players[0].mzone[0].faceUp = true;
+  h.players[0].mzone[0] = { ...h.players[0].mzone[0], id: 'pot_of_greed' }; // a Spell in a Monster Zone
+  assert.ok(audit(h).some((p) => p.includes('illegally')));
+});
+
+test('fuzz: 150 random duels never break the rules audit', () => {
+  for (let seed = 1; seed <= 150; seed++) {
+    let g = createGame({ decks: [SAMPLE_DECK, SAMPLE_DECK], seed });
+    let rng = seed;
+    for (let step = 0; step < 1500 && !g.result; step++) {
+      const legal = getLegalActions(g);
+      assert.ok(legal.length > 0, `no legal actions at seed ${seed} step ${step}`);
+      rng = (Math.imul(rng, 1103515245) + 12345) >>> 0;
+      g = dispatch(g, legal[rng % legal.length]);
+    }
+    assert.deepEqual(audit(g), []);
+  }
+});
+````
+
+## 12. `README.md`
+
+````md
+# Yu-Gi-Oh! Duel Table
+
+A rules engine plus a simple browser table for duelling a friend. Rules follow the **Master Rules, April 1, 2020 revision**, the latest set I could confirm. Always check Konami's current rulebook; if a rule changes, start with `src/rules.js`.
+
+## How the "everything is legal" checking works
+
+1. **Legal-move list.** `getLegalActions(game)` works out every move the rules allow right now. The table only shows you those moves, so you can't click an illegal one.
+2. **Gatekeeper.** `dispatch(game, action)` refuses any move that isn't on that list.
+3. **Audit.** The move runs on a copy of the game, then `audit()` checks the result: no cards created or lost, no duplicates, monsters only in Monster Zones, Spells/Traps only in their zones, face-down monsters in Defense, chain links point at real cards. If anything is off, the move is rejected and the real game is untouched.
+4. **Tests.** `npm test` runs 16 checks, including 150 random duels that must never break the audit.
+
+## What is implemented
+
+Setup (8000 LP, 40-60 card decks, 3-copy limit, draw 5), Draw/Main 1/Battle/Main 2/End phases, first player skips the first draw and cannot attack on turn 1, one Normal Summon or Set per turn, Tribute Summon/Set (Level 5-6 = 1, 7+ = 2), Flip Summon, position changes, attacks and battle damage (ATK vs ATK, vs Defense, face-down flip, direct), Spell/Trap Zones and the Field Zone, Graveyard and banished zones, setting and activating Spells/Traps with set-turn rules, Spell Speeds, chains with both-players-pass resolution, a response window at phase changes, the 6-card hand limit, and winning by Life Points or deck-out.
+
+## What is NOT implemented yet (be aware)
+
+- Extra Deck summons (Fusion, Synchro, Xyz, Pendulum, Link) and the Extra Monster Zones.
+- Trigger effects, flip effects, continuous and equip effects, effects that respond to summons or attacks (for example Mirror Force-style traps), damage-step timing, and effect negation.
+- Choosing which zone a monster goes in (it uses the first free one).
+- The Forbidden & Limited list. Pass the current one as `banlist` to `createGame`, for example `{ pot_of_greed: 0 }`.
+- Playing over the internet. Right now both players share one screen.
+- Only 10 monsters and 5 Spells/Traps are in `src/cards.js`.
+
+Yu-Gi-Oh! has thousands of cards with unique effects, so full coverage is a very large project. Mature open-source engines exist (EDOPro's `ygopro-core` with its card scripts is the best known) if you eventually want every card.
+
+## Run it in Cursor
+
+1. Install Node.js (nodejs.org, the LTS version).
+2. In Cursor: File > Open Folder, choose this folder.
+3. Open the terminal (Ctrl+` or Cmd+`) and run `npm test`. You should see "pass 16".
+4. Run `npm start`, then open http://localhost:8080 in your browser.
+
+## Put it on GitHub
+
+1. On github.com, click New repository, name it `ygo-duel`, leave it empty.
+2. In Cursor's terminal:
+   ```
+   git init
+   git add .
+   git commit -m "First version"
+   git branch -M main
+   git remote add origin https://github.com/YOUR-NAME/ygo-duel.git
+   git push -u origin main
+   ```
+3. On GitHub, open Settings > Pages, set Source to "Deploy from a branch", Branch `main`, folder `/ (root)`. After a minute, the table is live at `https://YOUR-NAME.github.io/ygo-duel/`.
+4. The included workflow in `.github/workflows/test.yml` runs the tests on every push.
+
+## Add a card
+
+Plain monsters are just data in `src/cards.js`:
+```js
+my_monster: mon('Card Name', 4, 1800, 1000),
+```
+Then add its id to a deck in `src/decks.js`. Spells and Traps need a `resolve` function; copy `pot_of_greed` or `dust_tornado` as a pattern. Run `npm test` after each change.
+
+Card names and stats belong to Konami. This is a personal fan project.
+````
